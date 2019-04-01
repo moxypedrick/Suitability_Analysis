@@ -1,0 +1,297 @@
+library(tidyverse)
+library(stringr)     
+
+library(sf)     
+library(raster)
+library(sp)
+library(mapview)
+library(tmap)
+
+library(tidycensus)
+library(tigris)
+library(lehdr)
+
+library(httr) 
+library(jsonlite)
+library(viridis)
+library(ggpubr)
+
+dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
+
+# Read in shapefile factor data:
+#Census tracts
+health <- st_read(paste(dir,"/Environmental Health Hazard Index/output.shp",sep = ''))
+transpoCost <- st_read(paste(dir,"/Low_Transportation_Cost_Index/Low_Transportation_Cost_Index.shp",sep = ''))
+#Polygons
+city <- st_read(paste(dir,"/Atlanta_City_Limits/Atlanta_City_Limits.shp",sep = '')) %>%
+  st_transform(26967)
+parks <- st_read(paste(dir,"/Parks/Parks.shp",sep = ''))%>%
+  st_transform(26967)
+#Point files
+grocery <- st_read(paste(dir,"/Grocery Stores/Atlanta_grocery_stores.shp",sep = ''))%>%
+  st_transform(26967)
+transit <- st_read(paste(dir,"/Transit_Stops_2018/Transit_Stops_2018.shp",sep = ''))%>%
+  st_transform(26967)
+
+#Read in csv factor data and then append to census tracts
+opportunity <- read_csv(paste(dir,"/tract_outcomes/data.txt",sep = ''))
+CNT_HT <- read_csv(paste(dir,"/htaindex_data_tracts_13/htaindex_data_tracts_13.csv",sep = ''))
+
+
+raster_template  <- raster(extent(city), resolution = 200, crs = st_crs(city)$proj4string)
+# Buffer and merge the grocery stores
+grocery_buffer <- st_buffer(grocery, dist=800)
+grocery_buffer_combined <- st_union(grocery_buffer) %>%
+  st_sf()
+grocery_raster <- raster::rasterize(grocery_buffer_combined, raster_template, field = 1, fun=sum, background = 0)
+
+
+#buffer and merge parks
+parks_buffer <- st_buffer(parks, dist=800)
+parks_buffer_combined <- st_union(parks_buffer) %>%
+  st_sf()
+parks_raster <- raster::rasterize(parks_buffer_combined, raster_template, field = 1, fun=sum, background = 0)
+
+
+#Create the census tracts
+tracts_ga <- tracts(
+  state = 13, cb = FALSE, year = 2018) %>% 
+  st_as_sf() %>%
+  st_transform(crs = 26967)
+
+tracts_atl <- tracts_ga %>%
+  filter(tracts_ga$COUNTYFP == "121" | tracts_ga$COUNTYFP == "089")
+
+health_indicator <- health%>%
+  filter(health$STATE == 13 & (as.character(health$COUNTY) == '121' | as.character(health$COUNTY) == '089')) %>%
+  mutate(
+    GEOID = as.character(GEOID)
+  ) 
+
+st_geometry(health_indicator) <- NULL
+
+transpo_cost <- transpoCost%>%
+  filter(transpoCost$STATE == 13 & (as.character(transpoCost$COUNTY) == '121' | as.character(transpoCost$COUNTY) == '089')) %>%
+  mutate(
+    GEOID = as.character(GEOID)
+  ) 
+
+st_geometry(transpo_cost) <- NULL
+
+ua00 <- urban_areas(cb = FALSE, year = 2017)
+ua01 <- ua00 %>% st_as_sf 
+
+
+opportunity <- opportunity %>%
+  mutate(
+    GEOID = as.character(census_tract)
+  )
+
+CNT_HT2 <- CNT_HT %>%
+  mutate(
+    GEOID = as.character(CNT_HT$tract)
+  )
+
+tracts_atl2 <- inner_join(tracts_atl, opportunity, by= c("GEOID"))
+tracts_atl3 <- inner_join(tracts_atl2, CNT_HT2, by="GEOID")
+tracts_atl4 <- inner_join(tracts_atl3, health_indicator, by="GEOID")
+tracts_atl5 <- inner_join(tracts_atl4, transpo_cost, by="GEOID") %>%
+  st_transform(26967)
+
+
+tracts_atl6 <- tracts_atl5[city,]
+
+final_tracts <- tracts_atl6 %>%
+  mutate(
+    land_area = ALAND,
+    prob_1 = kir_pooled_pooled_p1, 
+    prob_25 = kir_pooled_pooled_p25,
+    prob_75 = kir_pooled_pooled_p75,
+    prob_100 = kir_pooled_pooled_p100,
+    prob_mean = kir_pooled_pooled_mean,
+    transpo_cost = t_ami,
+    compact_neighborhood= compact_ndx,
+    job_access = emp_ovrll_ndx,
+    envi_hazard = haz_idx,
+    transpo_cost_arc = tcost_idx
+  ) %>%
+  select(GEOID, land_area, prob_1, prob_25, prob_75, prob_100, prob_mean, transpo_cost, compact_neighborhood, job_access, envi_hazard, transpo_cost_arc, population , households)
+
+range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+
+final_tracts_scaled <- tracts_atl6 %>%
+  mutate(
+    land_area = ALAND,
+    prob_1 = range01(ifelse(is.na(kir_pooled_pooled_p1)==TRUE,0,kir_pooled_pooled_p1)), 
+    prob_25 = range01(ifelse(is.na(kir_pooled_pooled_p25)==TRUE,0,kir_pooled_pooled_p25)),
+    prob_75 = range01(ifelse(is.na(kir_pooled_pooled_p75)==TRUE,0,kir_pooled_pooled_p75)),
+    prob_100 = range01(ifelse(is.na(kir_pooled_pooled_p100)==TRUE,0,kir_pooled_pooled_p100)),
+    prob_mean = range01(ifelse(is.na(kir_pooled_pooled_mean)==TRUE,0,kir_pooled_pooled_mean)),
+    transpo_cost = range01(ifelse(is.na(t_ami)==TRUE, 0, t_ami)),
+    compact_neighborhood= range01(ifelse(is.na(compact_ndx)==TRUE, 0, compact_ndx)),
+    job_access = range01(ifelse(is.na(emp_ovrll_ndx)==TRUE, 0, emp_ovrll_ndx)),
+    envi_hazard = range01(ifelse(is.na(haz_idx)==TRUE, 0,haz_idx)),
+    transpo_cost_arc = range01(ifelse(is.na(tcost_idx)==TRUE, 0, tcost_idx)),
+    suitability = range01(prob_mean + (-transpo_cost) + job_access + (-envi_hazard))
+  ) %>%
+  select(GEOID, suitability, land_area, prob_1, prob_25, prob_75, prob_100, prob_mean, transpo_cost, compact_neighborhood, job_access, envi_hazard, transpo_cost_arc, population , households)
+
+
+transpo_raster <- raster::rasterize(final_tracts_scaled, raster_template, field = final_tracts_scaled$transpo_cost, fun=sum)
+job_access_raster <- raster::rasterize(final_tracts_scaled, raster_template, field = final_tracts_scaled$job_access, fun=sum)
+envi_hazard_raster <- raster::rasterize(final_tracts_scaled, raster_template, field = final_tracts_scaled$envi_hazard, fun=sum)
+econ_mobile_raster <- raster::rasterize(final_tracts_scaled, raster_template, field = final_tracts_scaled$prob_mean, fun=sum)
+
+
+## Get the Urban Area for city we are interested in
+citySF <- "Atlanta, GA"
+crs_SF <- 2227
+
+facets = c("prob_mean","suitability", "transpo_cost", "job_access", "envi_hazard", "compact_neighborhood")
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(final_tracts_scaled) +
+  tm_polygons(col = "prob_mean", size = 0.5, palette = "-viridis")
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(final_tracts_scaled) +
+  tm_polygons(col = "transpo_cost", size = 0.5, palette = "-viridis")
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(final_tracts_scaled) +
+  tm_polygons(col = "envi_hazard", size = 0.5, palette = "-viridis")
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(final_tracts_scaled) +
+  tm_polygons(col = "compact_neighborhood", size = 0.5, palette = "-viridis")
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(final_tracts_scaled) +
+  tm_polygons(col = "job_access", size = 0.5, palette = "-viridis")
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(final_tracts_scaled) +
+  tm_polygons(col = "suitability", size = 0.5, palette = "-viridis")
+
+
+grocery <- grocery[city,]
+transit <- transit[city,] 
+
+
+marta_train <- transit %>%
+  filter(transit$agency_nam == "MARTA" & (transit$routes == "Atlanta HOusing Authority" | transit$routes  == "alsdf jasldkfj" | transit$routes =="BLUE" | transit$routes == "GOLD"  | transit$routes == "RED, GOLD" | transit$routes == "GREEN, BLUE"))
+
+marta_bus <- transit %>%
+  filter(transit$agency_nam == "MARTA" & (transit$routes != "RED" | transit$routes  != "GREEN" | transit$routes !="BLUE" | transit$routes != "GOLD"  | transit$routes != "RED, GOLD" | transit$routes != "GREEN, BLUE"))
+
+
+parcels <- st_read(paste(dir,"/Tax_Parcel/Tax_Parcel.shp",sep = ''))%>%
+  st_transform(26967) %>%
+  select(
+    OBJECTID,PARCELID, BUILDING, UNIT, NGHBRHDCD, CLASSCD, LIVUNITS, SITEADDRES, SITECITY, SITESTATE, SITEZIP, OWNERNME1, OWNERNME2, LNDVALUE, TOT_APPR, IMPR_APPR, LANDASSESS, IMPRASSESS, LANDAPPR
+  )
+
+
+atlanta_parcels_sort <- parcels %>%
+  filter(grepl("atlanta", parcels$OWNERNME1, ignore.case = TRUE))
+atlanta_parcels_sort_final <- atlanta_parcels_sort %>%
+  filter(grepl("aecf", atlanta_parcels_sort$OWNERNME1, ignore.case = TRUE) |  grepl("authority", atlanta_parcels_sort$OWNERNME1, ignore.case = TRUE) | grepl("beltline", atlanta_parcels_sort$OWNERNME1, ignore.case = TRUE) | grepl("development", atlanta_parcels_sort$OWNERNME1, ignore.case = TRUE) | grepl("education", atlanta_parcels_sort$OWNERNME1, ignore.case = TRUE))
+
+
+andp_parcels <- parcels %>%
+  filter(grepl("andp", parcels$OWNERNME1, ignore.case = TRUE))
+andp_parcels_final <- andp_parcels %>%
+  filter(grepl("RESTORATION", andp_parcels$OWNERNME1, ignore.case = TRUE) | grepl("home", andp_parcels$OWNERNME1, ignore.case = TRUE))
+
+
+development_parcels <- parcels %>%
+  filter(grepl("development", parcels$OWNERNME1, ignore.case = TRUE) & grepl("community", parcels$OWNERNME1, ignore.case = TRUE))
+development_parcels_final <- development_parcels %>%
+  filter(grepl("butler", development_parcels$OWNERNME1, ignore.case = TRUE)|grepl("cabbage", development_parcels$OWNERNME1, ignore.case = TRUE)|grepl("investment", development_parcels$OWNERNME1, ignore.case = TRUE)|grepl("english", development_parcels$OWNERNME1, ignore.case = TRUE)|grepl("limits", development_parcels$OWNERNME1, ignore.case = TRUE)|grepl("summech", development_parcels$OWNERNME1, ignore.case = TRUE)|grepl("university community", development_parcels$OWNERNME1, ignore.case = TRUE))
+
+
+fulton_parcels <- parcels %>%
+  filter(grepl("fulton", parcels$OWNERNME1, ignore.case=TRUE))
+fulton_parcels_final <- fulton_parcels %>%
+  filter(grepl("county", fulton_parcels$OWNERNME1, ignore.case=TRUE)|grepl("land", fulton_parcels$OWNERNME1, ignore.case=TRUE))
+fulton_parcels_final2 <- fulton_parcels_final %>%
+  filter(!grepl("brinson", fulton_parcels_final$OWNERNME1, ignore.case=TRUE)&!grepl("mac holdings", fulton_parcels_final$OWNERNME1, ignore.case=TRUE)&!grepl("ACQUISITION", fulton_parcels_final$OWNERNME1, ignore.case=TRUE))
+
+
+habitat_parcels <- parcels %>%
+  filter(grepl("habitat", parcels$OWNERNME1, ignore.case=TRUE) & !grepl("urban", parcels$OWNERNME1, ignore.case = TRUE))
+
+marta_parcels <- parcels %>%
+  filter(parcels$OWNERNME1 == "MARTA")
+
+urban_parcels <- parcels %>%
+  filter(grepl("urban", parcels$OWNERNME1, ignore.case=TRUE) & grepl("residential", parcels$OWNERNME1, ignore.case = TRUE) & grepl("finance auth", parcels$OWNERNME1, ignore.case = TRUE))
+
+municipal_parcels <- rbind(atlanta_parcels_sort_final, andp_parcels_final) %>%
+  rbind(., development_parcels_final) %>%
+  rbind(., fulton_parcels_final2) %>%
+  rbind(., habitat_parcels) %>%
+  rbind(., marta_parcels) %>%
+  rbind(., urban_parcels)
+
+
+MARTA_train_buffer <- st_buffer(marta_train, dist = 800) 
+MARTA_bus_buffer <- st_buffer(marta_bus, dist = 400)
+bus_buffer_merged <- st_union(MARTA_bus_buffer, by_feature = FALSE)%>%
+  st_sf()
+train_buffer_merged <- st_union(MARTA_train_buffer, by_feature = FALSE)%>%
+  st_sf()
+
+bus_raster <- raster::rasterize(bus_buffer_merged, raster_template, field = 1, fun=sum, background = 0)
+train_raster <- raster::rasterize(train_buffer_merged, raster_template, field = 1, fun = sum, background = 0)
+
+final_raster <- grocery_raster + parks_raster + bus_raster + train_raster + transpo_raster + job_access_raster + envi_hazard_raster + econ_mobile_raster 
+property_ranks <- raster::extract(x=final_raster,y= municipal_parcels, fun=mean,df=TRUE)
+
+property_ranks$OBJECTID <- municipal_parcels$OBJECTID
+
+View(property_ranks)
+View(municipal_parcels)
+
+municipal_parcels_ranked <- left_join(municipal_parcels, property_ranks, by="OBJECTID")
+
+
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(municipal_parcels) +
+  tm_polygons(col="red") +
+  tm_shape(final_raster) +
+  tm_raster()
+
+tmap_mode("view")
+tm_basemap("CartoDB.Positron", alpha = 1) +
+  tm_shape(municipal_parcels_ranked) +
+  tm_polygons(col= "layer")
+
+
+
+
+
+tm_shape(marta_train) +
+  tm_dots(col="red", size = 0.1) +
+  tm_shape(marta_bus) + 
+  tm_dots(col="red", size = 0.01, alpha = 0.25) + 
+  tm_shape(city) +
+  tm_borders()+
+  tm_shape(municipal_parcels) +
+  tm_polygons(col = "red") + 
+  tm_shape(parks) +
+  tm_polygons(col = "black") + 
+  tm_shape(grocery) +
+  tm_dots(col = "black")
+
+
+
+

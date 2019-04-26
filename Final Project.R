@@ -20,7 +20,6 @@ library(rgdal)
 
 
 
-
 dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
 
 # Read in data:

@@ -29,7 +29,7 @@ library(rgeos)
 ##      is also in this directory.
 
 
-dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project/Images'
+dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
 dir2 = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
 
 ## Load in all of the data
@@ -37,24 +37,8 @@ dir2 = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
 municipal_combined <- st_read(paste(dir,"/final_data_files/municipal_combined/municipal_parcels_final.shp",sep = '')) %>%
   st_transform(26967)
 
-municipally_owned_parcels <- st_read(paste(dir,"/final_data_files/municipally_owned_parcels/municipal_parcels.shp",sep = ''))%>%
-  st_transform(26967)
-
 City_of_Atlanta_Limits <- st_read(paste(dir2,"/Atlanta_City_Limits/Atlanta_City_Limits.shp",sep = ''))%>%
   st_transform(26967)
-
-atlanta_buildings <- st_read(paste(dir2,"/Building_Footprints/Building_Footprints.shp",sep = ''))%>%
-  st_transform(26967)
-
-regional_roads <- st_read(paste(dir2,"/Major_Roads/Major_Roads.shp",sep = ''))%>%
-  st_transform(26967)
-
-atlanta_parks <- st_read(paste(dir2,"/Parks/Parks.shp",sep = ''))%>%
-  st_transform(26967)
-
-
-
-atlanta_roads <- regional_roads[City_of_Atlanta_Limits,]
 
 
 bus_raster <-raster(paste(dir,"/final_data_files/raster_files/bus_raster.tif",sep = ''))

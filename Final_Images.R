@@ -201,7 +201,7 @@ avaliable_land_dedupe <- avaliable_land[!duplicated(avaliable_land$OBJECTI),]
 
 avaliable_land_sorted <- inner_join(avaliable_land_dedupe, openRefined_dedupe, by="OBJECTI") %>%
   mutate(
-    Owner = Owner.x
+    Owner = Owner.y
   ) %>%
   select(
     -one_of("Owner.y", "Owner.x")
@@ -215,6 +215,11 @@ Municipally_Owned_Land <-avaliable_land_sorted %>%
     LndAcrs = ifelse(is.na(LndAcrs), 0, LndAcrs)
   )
 
+vacant <- Municipally_Owned_Land %>%
+  filter(
+    vacant2 == "TRUE"
+  )
+View(Municipally_Owned_Land)
 
 tmap_mode("view")
 tm_basemap("Stamen.TonerLite")+

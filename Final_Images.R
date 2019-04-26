@@ -18,7 +18,6 @@ library(ggpubr)
 library(maptools)
 library(rgdal)
 library(rgeos)
-library(treemap)
 
 ##
 ##

@@ -189,7 +189,23 @@ tm_shape(parks_raster)+
             legend.bg.color = 'white')
 
 
-avaliable_land_sorted <- avaliable_land[order(-avaliable_land$fnl_scr, -avaliable_land$LndAcrs),]
+
+openRefined_data <- read_csv("C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project/municipally_as_data_frame-csv.csv")
+
+openRefined_join <- openRefined_data %>%
+  select(OBJECTI, Owner)
+
+
+openRefined_dedupe <- openRefined_join[!duplicated(openRefined_join$OBJECTI),]
+avaliable_land_dedupe <- avaliable_land[!duplicated(avaliable_land$OBJECTI),]
+
+avaliable_land_sorted <- inner_join(avaliable_land_dedupe, openRefined_dedupe, by="OBJECTI") %>%
+  mutate(
+    Owner = Owner.x
+  ) %>%
+  select(
+    -one_of("Owner.y", "Owner.x")
+  )
 
 Municipally_Owned_Land <-avaliable_land_sorted %>%
   mutate(
@@ -199,11 +215,6 @@ Municipally_Owned_Land <-avaliable_land_sorted %>%
     LndAcrs = ifelse(is.na(LndAcrs), 0, LndAcrs)
   )
 
-
-vacant <- Municipally_Owned_Land %>%
-  filter(
-    vacant2 == "TRUE"
-  )
 
 tmap_mode("view")
 tm_basemap("Stamen.TonerLite")+
@@ -216,6 +227,8 @@ tm_basemap("Stamen.TonerLite")+
               id = "Address",
               popup.vars = c("Address"  = "Address",
                              "Owner" = "Owner",
+                             "Tax Parcel ID" = "ParclID",
+                             "Zoning" = "ClassCd",
                              "Suitability Score" = "fnl_scr",
                              "Size (acres)" = "LndAcrs",
                              "Underutilized" = "undr_tl2",
@@ -245,10 +258,6 @@ available_land_greater_5 <- Municipally_Owned_Land %>%
   filter(
     fnl_scr2 >=5
   )
-
-ggplot(data = available_land_greater_5 , mapping = aes(x = Owner, y = LndAcrs, fill = fnl_scr2)) +
-  geom_col() + coord_flip()+ theme(legend.title = element_blank())
-
 
 available_land_by_owner <- available_land_greater_5 %>%
   group_by(

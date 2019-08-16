@@ -20,7 +20,7 @@ library(rgdal)
 
 
 
-dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
+dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Suitability_Analysis'
 
 # Read in data:
 
@@ -200,18 +200,37 @@ writeRaster(final_raster, filename="final_raster.grd", format="GTiff")
 ## Read in City of Atlanta property data
 
 
-parcels <- st_read(paste(dir,"/Tax_Parcels_2018/Tax_Parcels_2018.shp",sep = '')) %>%
-  st_transform(26967)  %>%
-  select(
-    OBJECTID,ParcelID, ClassCode, LivUnits, Address, Owner, TotAppr, LandAppr, ImprAppr, TotAssess, LandAssess, ImprAssess, LandAcres
-  ) %>%
-  mutate(
-    OWNERNME1 = Owner
-  ) 
+parcels <- st_read(paste(dir,"/Data_files/Data_files/Tax_Parcels_2018/Tax_Parcels_2018.shp",sep = '')) %>%
+  st_transform(26967)
+
+
+#Polygons
+city <- st_read(paste(dir,"/Data_files/Data_files/Atlanta_City_Limits/Atlanta_City_Limits.shp",sep = '')) %>%
+  st_transform(26967)
+
+
 
 parcels <- parcels[city,]
 
-Atlanta_buildings <- st_read(paste(dir, "/Building_Footprints/Building_Footprints.shp", sep=""))%>%
+st_geometry(parcels) <- NULL
+
+write.csv(parcels, file = "parcel_data.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+parcels <- parcels[city,]
+
+Atlanta_buildings <- st_read(paste(dir, "/Data_files/Data_files/Building_Footprints/Building_Footprints.shp", sep=""))%>%
   st_transform(26967)
 
 

@@ -29,8 +29,8 @@ library(rgeos)
 ##      is also in this directory.
 
 
-dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
-dir2 = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project'
+dir = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Suitability_Analysis'
+dir2 = 'C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Suitability_Analysis'
 
 ## Load in all of the data
 
@@ -173,7 +173,7 @@ tm_shape(parks_raster)+
 
 
 
-openRefined_data <- read_csv("C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Final Project/municipally_as_data_frame-csv.csv")
+openRefined_data <- read_csv("C:/Users/dpedrick/OneDrive/GaTech/Advanced GIS/Suitability_Analysis/final_data_files/municipally_as_data_frame-csv.csv")
 
 openRefined_join <- openRefined_data %>%
   select(OBJECTI, Owner)
